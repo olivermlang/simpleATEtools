@@ -47,6 +47,10 @@ rel_t2_form2 <- reformulate(c("respattnd",control_vars_2),
 rel_t2_mod1 <- feols(rel_t2_form1,
                      data = issp_dta, # only oecd
                      weights = issp_dta$weightfctr)
+model_obj_lm <- lm(rel_t2_form1,
+                     data = issp_dta, # only oecd
+                     weights = issp_dta$weightfctr)
+
 
 rel_t2_mod2 <- feols(rel_t2_form2,
                      data = issp_dta, # only oecd
@@ -84,21 +88,55 @@ rel_t2_weights_1 <- rel_t2_dtilde_1^2
 rel_t2_weights_2 <- rel_t2_dtilde_2^2
 ```
 
+```{r}
+# only supports formulas in which fixed effects are manually entered as controls
+
+calculate_w <- function(model_object, treatment, data) { 
+  
+  surv_weights <- model_object$weights
+  
+  if (class(model_object)=="fixest") {
+    # only select observations that weren't automatically dropped during regression
+    obs <- data[-model_object$obsRemoved,]
+    # model regressing treatment on all covs
+    d_tilde_form <- reformulate( 
+      termlabels = all.vars(model_object$fml)[-c(1,which(all.vars(model_object$fml)==treatment))],
+      response = treatment
+    )
+    # squared residuals from regression
+    d_tilde <- lm(d_tilde_form, data = obs)$residuals^2
+  }
+  
+  if (class(model_object)=="lm") {
+    # only select observations that weren't automatically dropped during regression
+    obs <- model_object$model
+    
+    d_tilde_form <- reformulate(
+      termlabels = all.vars(model_object$terms[[3]])[-which(all.vars(model_object$terms[[3]])==treatment)],
+      response = treatment
+    )
+    
+    d_tilde <- lm(d_tilde_form, data = obs)$residuals^2
+  }
+  return(d_tilde)
+}
+
+```
+
 ### Visualize
 
-<<<<<<< HEAD
-The next step is to visualize the distribution of weights by different covariate values.
+The next step is to visualize the distribution of weights by different covariate values. This has several goals: first, it 
 
-=======
->>>>>>> d21818e22de5fc1efaa2208c53550cfecb2f7301
 ```{r}
-
-
 
 
 
 by_country_weights_1 <- tapply(rel_t2_weights_1, issp_used_1$cntryna2, mean)
 by_country_weights_2 <- tapply(rel_t2_weights_2, issp_used_2$cntryna2, mean)
+
+
+
+
 ```
 
 
