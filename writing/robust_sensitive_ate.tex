@@ -1,0 +1,70 @@
+\documentclass[hidelinks,11pt]{article}
+\usepackage{setspace}
+\usepackage{mathpazo}
+\usepackage[makeroom]{cancel}
+\usepackage{arabtex}
+\usepackage{indentfirst}
+\usepackage[md]{titlesec}
+\usepackage{xcolor}
+\usepackage{mwe}
+\usepackage{lipsum}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage[makeroom]{cancel}
+\usetikzlibrary{positioning}
+\usepackage{subcaption}
+\usepackage{caption}
+\usepackage{rotating}
+\usepackage[margin=1.2in]{geometry}
+\usepackage{graphicx}
+\usepackage[authoryear]{natbib}
+\usepackage[pagebackref=true]{hyperref}
+\hypersetup{citecolor=blue}
+\usepackage{arabtex}
+\usepackage{amssymb}
+\begin{document}
+\bibliographystyle{apsa-leeper}
+\setarab
+\vocalize
+\transtrue
+\arabfalse
+\title{Tools for evaluating the assumptions of regression estimates of the ATE under strong ignorability}
+\author{Oliver Lang \\ \\
+\color{darkgray}
+	\texttt{omlang@wisc.edu}}
+      \maketitle
+
+
+     
+\section{Weighting assumptions when treatment effects are heterogeneous}
+
+Theories in the social sciences are usually formulated with scope conditions. Scope conditions delimit a theoretically determined target population---a population of units for which we would expect the empirical implications of our theories to hold. A theoretical estimand will be more informative for theory when the estimand is defined for a population that is representative of the target population picked out by scope conditions. For this reason, analysts often seek to estimate average treatment effects assuming strong ignorability for populations that meet this criteria. Indeed, the ability to use data that is sampled from, or closely approximates, the population picked out by scope conditions is often used to justify the choice of strong ignorability as an identification strategy in lieu of experimental or quasi-experimental designs that only exploit variation within a smaller population.
+
+This section summarizes recent work showing that, under certain assumptions, regression estimates of the ATE under unconfoundedness produce weighted averages of the individual treatment effects in a population---and that these weighted averages may fail to approximate the population average causal effect of interest. Thus, computing an estimate using data from a population that is representative does not guarantee that the resulting estimates will also be representative.
+
+A key contribution of these papers is that they also provide simple tools to calculate the weights that are assigned to different units or groups of units. I review these contributions and provide simple visualizations that allow analysts and readers to transparently evaluate how these weighting issues affect substantive results. 
+
+\subsubsection{\citet{aronowsamii2016}}
+
+Aronow and Samii examine the performance of linear regression estimates in a simple setting: Individual treatment effects are heterogeneous, uncounfoundedness holds, and expected treatment status is linear in the covariates (or transformations thereof) that are included in the regression model. 
+
+They show that the regression estimate $\hat \beta$ of the treatment effect can be represented 
+
+\subsubsection{\citet{sloczynski2020}}
+
+
+\section{Sensitivity and unobserved confounding}
+      
+
+
+      
+\bibliography{/users/oliverlang/bibliography1}
+\end{document}
+
+
+regime shocks -> lower “adaptive capabilities”
+
+farmers get quotas: sell back to state at fixed prices
+amentities free for forced laborers.
+individual pickers get quotas: norm
+

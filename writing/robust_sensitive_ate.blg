@@ -1,0 +1,46 @@
+This is BibTeX, Version 0.99d (TeX Live 2018)
+Capacity: max_strings=100000, hash_size=100000, hash_prime=85009
+The top-level auxiliary file: robust_sensitive_ate.aux
+The style file: apsa-leeper.bst
+Database file #1: /users/oliverlang/bibliography1.bib
+You've used 2 entries,
+            2925 wiz_defined-function locations,
+            629 strings with 4499 characters,
+and the built_in function-call counts, 8167 in all, are:
+= -- 1346
+> -- 76
+< -- 0
++ -- 617
+- -- 25
+* -- 683
+:= -- 1638
+add.period$ -- 8
+call.type$ -- 2
+change.case$ -- 26
+chr.to.int$ -- 2
+cite$ -- 2
+duplicate$ -- 34
+empty$ -- 71
+format.name$ -- 27
+if$ -- 1473
+int.to.chr$ -- 5
+int.to.str$ -- 0
+missing$ -- 2
+newline$ -- 11
+num.names$ -- 22
+pop$ -- 8
+preamble$ -- 1
+purify$ -- 30
+quote$ -- 0
+skip$ -- 31
+stack$ -- 0
+substring$ -- 1906
+swap$ -- 8
+text.length$ -- 28
+text.prefix$ -- 0
+top$ -- 0
+type$ -- 8
+warning$ -- 0
+while$ -- 49
+width$ -- 0
+write$ -- 28

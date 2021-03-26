@@ -1,0 +1,54 @@
+---
+# The top of any Rmd document is the header, written with YAML.
+# We are controlling global settings for the way the document is built.
+
+# Comments in YAML are like comments in R, the pound sign `#`
+
+
+
+# Supply VALUES to VARIABLES.
+# By default, values don't need to be quoted.
+title: In-Depth R Markdown
+
+# If the value contains a special character (in this case, a colon)
+#   you may want to put the value in quotes
+author: "PS 811: Introduction to Statistical Computing"
+
+# We can also use the vertical pipe | to include more complex inputs
+#   such as inline R code
+#   or LaTeX code
+date: |
+  `r format(Sys.time(), '%B %d, %Y')`
+abstract: |
+  This document serves as lecture notes for R Markdown (March 27, 2020). It demonstrates key capabilities of R Markdown for preparing HTML documents and PDF documents: incorporating R code along with Markdown writing, controlling the output of R code, writing math, creating tables and figures, bibliographies, rendering to multiple output formats, and more.
+
+# Many Rmd options are "global"
+# i.e. they don't depend on output type.
+geometry: margin = 1.15in              # margin widths
+fontsize: 12pt                         # text size
+bibliography: "~/bibliography1.bib" # bibliography file
+biblio-style: authoryear              # citation style
+urlcolor: blue                         # links to external URLs
+citecolor: black                       # links to bibliography
+linkcolor: magenta                     # internal figures, footnotes, etc.
+indent: false                          # paragraph format
+                                       # (true for indented paragraphs)
+
+# While other Rmd options are output-specific,
+#   which can be modified as "sub-options" 
+#   tracked by this indentation setup.
+output: 
+  bookdown::pdf_document2:
+    keep_tex: true
+    latex_engine: xelatex
+    number_sections: true
+    toc: true
+    fig_caption: true
+    citation_package: natbib
+    includes: 
+      in_header: 
+        - latex-preamble.tex
+  bookdown::html_document2: default
+  bookdown::word_document2:
+    toc: true
+---

@@ -1,0 +1,14 @@
+\begin{thebibliography}{xx}
+
+\harvarditem{Aronow and Samii}{2016}{aronowsamii2016}
+Aronow, Peter~M, and Cyrus Samii. 2016.
+\newblock ``Does regression produce representative estimates of causal
+  effects?'' {\em American Journal of Political Science} 60(1):~250--267.
+
+\harvarditem{S{\l}oczy{\'n}ski}{2020}{sloczynski2020}
+S{\l}oczy{\'n}ski, Tymon. 2020.
+\newblock ``Interpreting OLS Estimands When Treatment Effects Are
+  Heterogeneous: Smaller Groups Get Larger Weights.'' {\em Review of Economics
+  and Statistics} ,~1--27.
+
+\end{thebibliography}

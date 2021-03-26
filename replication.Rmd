@@ -1,0 +1,105 @@
+---
+title: "Untitled"
+author: "Oliver Lang"
+date: "3/26/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(here,tidyverse,estimatr,fixest,broom,tidyr,haven,modelsummary)
+```
+
+## Scheve and Stasavage Replication
+
+```{r replication data}
+rel_dta <- read_dta(here("replication","scheve-stasavage_2006","wvalaggSSrep.dta"))
+
+######## table 1 #########
+
+# g import dv
+rel_t1_mod1 <- feols(ssw ~ godimp + gini_8090 + trade + prop65 + maj +
+                    cath + buddh,
+                  data = rel_dta[rel_dta$oecd==1,])
+# relig. import dv
+rel_t1_mod2 <- feols(ssw ~ relpractice + gini_8090 + trade + prop65 + maj
+                  + cath + buddh,
+                  data = rel_dta[rel_dta$oecd==1,])
+
+######## table 2 #########
+issp_dta <- 
+  read_dta(here("replication","scheve-stasavage_2006","isspindSSrep.dta"))[issp_dta$hiincoecd2==1,]
+
+
+# model formulas
+control_vars_1 <- c("female", "educyrs2", "age", "famquart", "unemployed", "union", "cath", "protes",
+                  str_subset(colnames(issp_dta),"coecdA")) # country fixed effects
+
+control_vars_2 <- c("female", "educyrs2", "age", "famquart", "unemployed", "union", "cath", "protes","partylr",
+                  str_subset(colnames(issp_dta),"coecdA")) 
+
+rel_t2_form1 <- reformulate(c("respattnd",control_vars_1),
+                            response = "spend3")
+
+rel_t2_form2 <- reformulate(c("respattnd",control_vars_2), 
+                            response = "spend3")
+# run models
+rel_t2_mod1 <- feols(rel_t2_form1,
+                     data = issp_dta, # only oecd
+                     weights = issp_dta$weightfctr)
+
+rel_t2_mod2 <- feols(rel_t2_form2,
+                     data = issp_dta, # only oecd
+                     weights = issp_dta$weightfctr)
+
+# cluster SEs at country level
+rel_t2_mod1_se <- summary(rel_t2_mod1, cluster = "cntryna2")
+rel_t2_mod2_se <- summary(rel_t2_mod2, cluster = "cntryna2")
+
+rel_t2_mods <- list(rel_t2_mod1_se, rel_t2_mod2_se)
+
+modelplot(
+  rel_t2_mods,
+  coef_map = c("respattnd" = "Religious Attendance")
+) +
+  labs(caption = 'Dependent variable: Support for social spending')
+
+```
+
+### Regression Weights
+
+```{r}
+# observations not removed in regression
+issp_used_1 <- issp_dta[-rel_t2_mod1$obsRemoved,]
+issp_used_2 <- issp_dta[-rel_t2_mod2$obsRemoved,]
+
+rel_treat_on_cont_form1 <- reformulate(control_vars_1, response = "respattnd")
+rel_treat_on_cont_form2 <- reformulate(control_vars_2, response = "respattnd")
+
+# get residuals from regression of treatment on controls
+rel_t2_dtilde_1 <- feols(rel_treat_on_cont_form1, data = issp_used_1)$residuals
+rel_t2_dtilde_2 <- feols(rel_treat_on_cont_form2, data = issp_used_2)$residuals
+
+rel_t2_weights_1 <- rel_t2_dtilde_1^2
+rel_t2_weights_2 <- rel_t2_dtilde_2^2
+```
+
+### Visualize
+
+<<<<<<< HEAD
+The next step is to visualize the distribution of weights by different covariate values.
+
+=======
+>>>>>>> d21818e22de5fc1efaa2208c53550cfecb2f7301
+```{r}
+
+
+
+
+
+by_country_weights_1 <- tapply(rel_t2_weights_1, issp_used_1$cntryna2, mean)
+by_country_weights_2 <- tapply(rel_t2_weights_2, issp_used_2$cntryna2, mean)
+```
+
+
+
