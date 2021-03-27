@@ -1,6 +1,6 @@
 calculate_w <- function(model_object, treatment, data) { 
   
-  if (class(model_object!="fixest" & class(model_object)!="lm")) {
+  if (class(model_object)!="fixest" & class(model_object)!="lm") {
     cat("WARNING: Model object is not of class 'lm' or 'fixest'\n")
   }
   
@@ -29,3 +29,10 @@ calculate_w <- function(model_object, treatment, data) {
   }
   return(d_tilde)
 }
+
+
+
+# to-do
+
+# - make compatible with lm_robust object
+# - d_tilde_form for objects where FEs are entered seperately

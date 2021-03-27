@@ -118,9 +118,13 @@ calculate_w <- function(model_object, treatment, data) {
     
     d_tilde <- lm(d_tilde_form, data = obs)$residuals^2
   }
-  return(d_tilde)
+  
+  out <- list("d_tilde" = d_tilde, "data" = obs, "treatment" = treatment)
+  
+  return(out)
 }
 
+weights <- calculate_w(model_object, data = issp_dta, treatment = "respattnd")
 ```
 
 ### Visualize
@@ -128,6 +132,71 @@ calculate_w <- function(model_object, treatment, data) {
 The next step is to visualize the distribution of weights by different covariate values. This has several goals: first, it 
 
 ```{r}
+plot_weights <- function(weights,
+                         type,
+                         var,
+                         ordinal = FALSE,
+                         probs = seq(.1,1,length.out=10)) { 
+  
+  if (lapply(weights$data, class)[which(colnames(weights$data) == var)] == "numeric") { # if variable is numeric
+    
+    var_vals <- weights$data[,which(colnames(weights$data) == var)]
+    
+    var_quantiles <- quantile(var_vals, probs = probs)
+    
+    # order weight vector by value that variable takes
+    # smallest to largest
+    ascending_var_index <- sort(var_vals, index.return=TRUE)$ix
+    ascending_weights <- weights$d_tilde[ascending_var_index]
+    
+    q <- seq(.1,1, length.out=10)
+    
+    unweighted_qtiles <- c()
+    weighted_qtiles <- c()
+    
+    for (j in seq_along(q)) {
+      for (i in seq_along(ascending_weights)) {
+        if (sum(ascending_weights[1]:ascending_weights[i]) >= q[j]){
+          unweighted_qtiles[j] <- ascending_var_index[i]
+          break
+      }
+      
+      }
+      
+    }
+    
+    
+    
+    
+    
+    x <- funciton(x, y, t = 0.5) {
+      ord <- order(y/x)
+      z <- (y/x)[ord]
+      wabs <- abs(x[ord])
+      k <- sum(cumsum(wabs) < ((t - 0.5) * sum(x) + 0.5 * sum(wabs)))
+      z[k + 1]
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    plot()
+    plot()
+    
+    
+    
+    weights$d_tilde[]
+    
+  }
+  
+  
+  
+
+
 
 
 
