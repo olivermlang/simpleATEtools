@@ -1,3 +1,5 @@
+# calculate weights using residuals from different model objects
+
 calculate_w <- function(model_object, treatment, data) { 
   
   if (class(model_object)!="fixest" & class(model_object)!="lm") {

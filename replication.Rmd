@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-pacman::p_load(here,tidyverse,estimatr,fixest,broom,tidyr,haven,modelsummary)
+pacman::p_load(here,quantreg,tidyverse,estimatr,fixest,broom,tidyr,haven,modelsummary)
 ```
 
 ## Scheve and Stasavage Replication
@@ -18,9 +18,16 @@ rel_dta <- read_dta(here("replication","scheve-stasavage_2006","wvalaggSSrep.dta
 ######## table 1 #########
 
 # g import dv
-rel_t1_mod1 <- feols(ssw ~ godimp + gini_8090 + trade + prop65 + maj +
+rel_t1_mod1_fixest <- feols(ssw ~ godimp + gini_8090 + trade + prop65 + maj +
                     cath + buddh,
                   data = rel_dta[rel_dta$oecd==1,])
+rel_t1_mod1_lm <- lm(ssw ~ godimp + gini_8090 + trade + prop65 + maj +
+                    cath + buddh,
+                  data = rel_dta[rel_dta$oecd==1,])
+rel_t1_mod1_estmtr <- lm_robust(ssw ~ godimp + gini_8090 + trade + prop65 + maj +
+                    cath + buddh,
+                  data = rel_dta[rel_dta$oecd==1,])
+
 # relig. import dv
 rel_t1_mod2 <- feols(ssw ~ relpractice + gini_8090 + trade + prop65 + maj
                   + cath + buddh,
@@ -28,12 +35,16 @@ rel_t1_mod2 <- feols(ssw ~ relpractice + gini_8090 + trade + prop65 + maj
 
 ######## table 2 #########
 issp_dta <- 
-  read_dta(here("replication","scheve-stasavage_2006","isspindSSrep.dta"))[issp_dta$hiincoecd2==1,]
+  read_dta(here("replication","scheve-stasavage_2006","isspindSSrep.dta") )
+
+# [issp_dta$hiincoecd2==1,]
 
 
 # model formulas
 control_vars_1 <- c("female", "educyrs2", "age", "famquart", "unemployed", "union", "cath", "protes",
                   str_subset(colnames(issp_dta),"coecdA")) # country fixed effects
+
+
 
 control_vars_2 <- c("female", "educyrs2", "age", "famquart", "unemployed", "union", "cath", "protes","partylr",
                   str_subset(colnames(issp_dta),"coecdA")) 
@@ -86,43 +97,75 @@ rel_t2_dtilde_2 <- feols(rel_treat_on_cont_form2, data = issp_used_2)$residuals
 
 rel_t2_weights_1 <- rel_t2_dtilde_1^2
 rel_t2_weights_2 <- rel_t2_dtilde_2^2
+
+
 ```
 
 ```{r}
 # only supports formulas in which fixed effects are manually entered as controls
+model_object <- rel_t1_mod1
+model_object$fml
+model_object$collin.var
 
-calculate_w <- function(model_object, treatment, data) { 
-  
-  surv_weights <- model_object$weights
-  
-  if (class(model_object)=="fixest") {
-    # only select observations that weren't automatically dropped during regression
-    obs <- data[-model_object$obsRemoved,]
-    # model regressing treatment on all covs
-    d_tilde_form <- reformulate( 
-      termlabels = all.vars(model_object$fml)[-c(1,which(all.vars(model_object$fml)==treatment))],
-      response = treatment
-    )
-    # squared residuals from regression
-    d_tilde <- lm(d_tilde_form, data = obs)$residuals^2
-  }
-  
+model_object <- rel_t1_mod1_fixest
+model_object <- rel_t1_mod1_lm
+model_object <- rel_t1_mod1_estmtr
+treatment <- "godimp"
+outcome <- "ssw"
+data <- rel_dta[rel_dta$oecd==1,]
+
+
+calculate_w <- function(model_object, treatment, outcome, data) { 
+  # need to add way to deal with survey weights
+  # surv_weights <- model_object$weights
   if (class(model_object)=="lm") {
     # only select observations that weren't automatically dropped during regression
-    obs <- model_object$model
+    obs <- data
+    ols_form <- as.character(eval(model_object$call[[2]]))[3] # get out call
+    rhs <- trimws(unlist(stringr::str_split(ols_form, "\\+"))) # split up into right-hand-side terms
+    rhs <- rhs[rhs!=treatment] # drop treatment from rhs
+    d_tilde_form <- reformulate(response = treatment, termlabels = rhs)
+    # get D tilde
+    d_tilde <- lm(d_tilde_form, data = data)$residuals^2
+  }
+  
+  if (class(model_object)=="fixest") {
+    if (model_object$collin.var==TRUE) {
+      cat("Collinear variables in original regression, please use model object without dropped variables")
+    }
+    obs <- data
+    ols_form <- as.character(model_object$fml[3])
+    rhs <- trimws(unlist(stringr::str_split(ols_form, "\\+")))
+    rhs <- rhs[rhs!=treatment]
+    d_tilde_form <- reformulate(response = treatment, termlabels = rhs)
+    d_tilde <- lm(d_tilde_form, data = data)$residuals^2
+  }
+  
+  if (class(model_object)=="estimatr") {
     
-    d_tilde_form <- reformulate(
-      termlabels = all.vars(model_object$terms[[3]])[-which(all.vars(model_object$terms[[3]])==treatment)],
-      response = treatment
-    )
     
-    d_tilde <- lm(d_tilde_form, data = obs)$residuals^2
+    
+    obs <- data
+    ols_form <- as.character(eval(model_object$call[[2]]))[3] 
+    rhs <- trimws(unlist(stringr::str_split(ols_form, "\\+")))
+    rhs <- rhs[rhs!=treatment]
+    d_tilde_form <- reformulate(response = treatment, termlabels = rhs)
+    d_tilde <- lm(d_tilde_form, data = data)$residuals^2
   }
   
   out <- list("d_tilde" = d_tilde, "data" = obs, "treatment" = treatment)
   
   return(out)
 }
+# 
+#     
+#     d_tilde_form <- reformulate(
+#       termlabels = all.vars(model_object$terms[[3]])[-which(all.vars(model_object$terms[[3]])==treatment)],
+#       response = treatment
+#     )
+    
+    
+
 
 weights <- calculate_w(model_object, data = issp_dta, treatment = "respattnd")
 ```
@@ -154,19 +197,21 @@ plot_weights <- function(weights,
     unweighted_qtiles <- c()
     weighted_qtiles <- c()
     
-    for (j in seq_along(q)) {
-      for (i in seq_along(ascending_weights)) {
-        if (sum(ascending_weights[1]:ascending_weights[i]) >= q[j]){
-          unweighted_qtiles[j] <- ascending_var_index[i]
-          break
-      }
-      
-      }
+    x <- function(var_vals, weights, t){
+      ord_var_index <- order(var_vals)
+      ord_weights <- weights$d_tilde[ord_var_index]
+      w_abs <- 
       
     }
     
-    
-    
+    for (j in seq_along(q)) {
+      for (i in seq_along(ascending_weights)) {
+        if (sum(ascending_weights[1]:ascending_weights[i]) >= q[j]*sum(ascending_weights)){
+          unweighted_qtiles[j] <- ascending_var_index[i]
+        }
+      }
+      
+    }
     
     
     x <- funciton(x, y, t = 0.5) {

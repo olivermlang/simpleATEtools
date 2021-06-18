@@ -1,0 +1,17 @@
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 1
+\BOOKMARK [1][-]{section.2}{Recovering causal effects under selection on observables}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Preliminaries and notation}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Identification}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Estimation via OLS}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{Effect heterogeneity across treatment and control groups}{}% 6
+\BOOKMARK [2][-]{subsection.3.1}{Binary treatment}{section.3}% 7
+\BOOKMARK [2][-]{subsection.3.2}{Effect heterogeneity between treatment and control groups}{section.3}% 8
+\BOOKMARK [1][-]{section.4}{Effect heterogeneity across and within treatment and control groups}{}% 9
+\BOOKMARK [1][-]{section.5}{Sensitivity Analysis}{}% 10
+\BOOKMARK [2][-]{subsection.5.1}{Classic omitted variable bias}{section.5}% 11
+\BOOKMARK [2][-]{subsection.5.2}{Omitted variable bias in terms of partial R2}{section.5}% 12
+\BOOKMARK [2][-]{subsection.5.3}{Sensitivity quantities}{section.5}% 13
+\BOOKMARK [2][-]{subsection.5.4}{Replication study}{section.5}% 14
+\BOOKMARK [2][-]{subsection.5.5}{Worst case sensitivity analysis}{section.5}% 15
+\BOOKMARK [2][-]{subsection.5.6}{Robustness values}{section.5}% 16
+\BOOKMARK [1][-]{section.6}{Conclusion}{}% 17

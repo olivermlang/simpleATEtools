@@ -1,0 +1,196 @@
+---
+title: "Untitled"
+author: "Oliver Lang"
+date: "6/6/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+```{r}
+pacman::p_load(dplyr,purrr,here,sensemakr, splines, MASS, CBPS, ebal)
+make_data <- function(n, 
+                      g1_noise = 1, # noisier p-score func. is for group 1
+                      baseline = -1, # size of baseline diffs btwn T vs. C
+                      heterog = -1, # size of heterog. diffs btwn T vs. C
+                      base_heterog = -1
+                      ) {
+  X_true <- mvrnorm(n, mu = rep(0, 3), Sigma = diag(3))
+# make groups
+  g1 <- sample(1:n, n/2, replace = F)
+  g2 <- c(1:n)[-g1]
+
+# selection: units w/ bigger p-score have bigger Y_0
+# follows b/c baseline potential outcomes are similar func to p-score
+  Y_0 <- rnorm(n, 15, 4) + baseline*X_true[,1] + base_heterog*X_true[,2] #+ 1*X_true[,3]
+# propensity scores as func. of covs + noise
+  p_score <- c()
+  p_score[g1] <- 1 / (1 + exp(X_true[g1,1] + 5*X_true[g1,2] + 3*X_true[g1,3] + rnorm(length(g1), 0, g1_noise)))
+  p_score[g2] <- 1 / (1 + exp(X_true[g2,1] + 5*X_true[g2,2] + 3*X_true[g2,3] + rnorm(length(g2), 0, 1)))
+  
+
+# assign treatment
+  D <- rbinom(n, 1, p_score)
+
+# heterog. treatment effects, vary wrt cov strata
+  tau <- c()
+  tau <- rnorm(n/2, 6, 1) + base_heterog*X_true[g1,2] + heterog*X_true[g1,3] #.7*X_true[g1,2] +    
+
+  Y_1 <- Y_0 + tau
+
+  Y <- D*Y_1 + (1-D)*Y_0
+
+# realized Xs are transformation of covs in underlying p-score function
+  X <- cbind(exp(X_true[,1] / 2),
+           (X_true[,2] / (1 + exp(X_true[,1]))) + 10, 
+           round( (100*X_true[,3]) + 100, -2)) # round to nearest 
+  data <- as.data.frame(cbind(D,X,Y,Y_0,Y_1,p_score,tau,(1:n %in% g1),(1:n%in%g2)))
+  colnames(data) <- c("D","X1","X2","X3","Y","Y_0","Y_1","p_score","tau","g1","g2")
+  return(tibble::as_tibble(data))
+}
+
+# data <- make_data(1000)
+
+ns <- c(100,400,1000)
+g1_noises <- c(1)
+baselines <- c(-1,-2,-3)
+heterogs <- c(-1,-2,-3)
+base_heterogs <- c(-1,-2,-3)
+
+sims <- tibble::as_tibble(expand.grid(rep(ns,2),rep(g1_noises,2),rep(baselines,2),rep(heterogs,2),rep(base_heterogs,2)))
+colnames(sims) <- c("n","g1_noise","baseline","heterog","base_heterog")
+sim_frames <- list()
+
+
+for (i in 1:nrow(sims)) {
+  sim_frames[[i]] <- make_data(
+    n = sims$n[i],
+    g1_noise = sims$g1_noise[i],
+    baseline = sims$baseline[i],
+    heterog = sims$heterog[i],
+    base_heterog = sims$base_heterog[i]
+  )
+}
+
+run_regs <- function(sim_frame) { 
+  reg_naive <- lm(Y~D, data = sim_frame)
+  reg_select <- lm(Y ~ D + log(X1) + X2, data = sim_frame)
+  reg_het <- lm(Y ~ D + X2 + X3, data = sim_frame)
+  reg_full <- lm(Y ~ D + log(X1) + X2 + X3, data = sim_frame)
+  reg_flex <- lm(Y ~ D + bs(X1) + bs(X2) + bs(X3), data = sim_frame)
+  reg_useless <- lm(Y ~ D + log(X1) + X2 + X3 + rnorm(nrow(sim_frame), 1, 2)*rnorm(nrow(sim_frame), 5, 3) + rnorm(nrow(sim_frame), 4, 2)*rnorm(nrow(sim_frame), 5, 4), data = sim_frame)
+  
+  return(list(reg_naive=reg_naive,reg_select=reg_select,reg_het=reg_het,reg_full=reg_full,reg_flex=reg_flex,reg_useless=reg_useless))
+}
+
+regs <- map(sim_frames,run_regs)
+
+reg_ates <- map(regs,~map_dbl(.x, function(x) x$coefficients[2])) %>% 
+  bind_rows()
+
+
+reg_rvs <- map(regs, ~map_dbl(.x, function(x) sensemakr(x, treatment = "D")$sensitivity_stats$rv_q)) %>% bind_rows()
+colnames(reg_rvs) <- paste0("rv_",colnames(reg_rvs))
+
+true_ates <- map_dbl(sim_frames, ~mean(.x$tau))
+
+decomp_func <- function(sim_frame) { 
+  
+  ate <- mean(sim_frame$tau)
+  baseline_diffs <- mean(sim_frame$Y_0[sim_frame$D==1]) - mean(sim_frame$Y_0[sim_frame$D==0])
+  heterog_tes <- (1-sum(sim_frame$D)/nrow(sim_frame))*(mean(sim_frame$tau[sim_frame$D==1]) - mean(sim_frame$tau[sim_frame$D==0]))
+  total_bias <- baseline_diffs + heterog_tes
+  
+  out <- c(ate,baseline_diffs,heterog_tes,total_bias)
+  names(out) <- c("ate","baseline_diffs","heterog_tes","total_bias")
+  return(out)
+}
+
+decomps <- map(sim_frames, decomp_func) %>% 
+  bind_rows()
+
+df <- bind_cols(sims,decomps,reg_ates,reg_rvs)
+```
+
+
+```{r basic sim props}
+plot(jitter(df$n) ~ abs(df$reg_full - df$ate) )
+
+mean(abs(df$ate - df$reg_naive))
+mean(abs(df$ate - df$reg_flex ))
+mean(abs(df$ate - df$reg_full))
+mean(abs(df$ate - df$reg_het))
+
+var(df$reg_het)
+var(df$reg_full)
+
+# more biased regressions w/o full covariates have bigger R-values, b/c there is more residual 
+bias_diff<- (df$ate - df$reg_het) - (df$ate - df$reg_full) 
+rval_diff <- df$rv_reg_het - df$rv_reg_full
+
+# cov_prob
+plot(rval_diff ~ bias_diff,
+     xlab = "Difference in bias between restricted and full specification",
+     ylab = "Difference in r-value between restricted and full spcification", cex = .6)
+abline(v = 0, lty = 2, col = "#56B4E9", cex = 3)
+abline(h = 0, lty = 2, col = "#56B4E9", cex = 3)
+```
+
+
+
+
+mean(df$rv_reg_useless)
+mean(df$rv_reg_select)
+
+var(df$reg_naive)
+var(df$reg_flex )
+var(df$reg_full )
+
+
+x <- df %>% group_by(total_bias) %>% 
+  summarize(mean_rv_naive = mean(rv_reg_naive),
+            mean_naive_bias = mean(abs(ate - reg_naive)),
+            mean_rv_full = mean(rv_reg_full),
+            mean_full_bias = mean(abs(ate - reg_full)),
+            mean_rv_select = mean(rv_reg_select),
+            mean_select_bias = mean(abs(ate - reg_select)),
+            mean_rv_het = mean(rv_reg_het),
+            mean_het_bias = mean(abs(ate - reg_het))
+            )
+
+
+
+plot(x$mean_rv_full~x$mean_rv_naive),
+     xlim = c(.2,.7))
+plot(x$mean_full_bias~x$mean_rv_full)
+plot(x$mean_select_bias~x$mean_rv_select)
+plot(x$mean_het_bias~x$mean_rv_het)
+
+plot(df$rv_reg_full ~ abs(df$reg_full - df$ate),
+     ylab = "Robustness value from regression",
+     xlab = "Estimated bias of regression estimates",
+     xlim = c(0,6), ylim = c(.2,.7), cex = .3)
+points(df$rv_reg_naive ~ abs(df$reg_naive - df$ate), col = "blue", cex = .3)
+points(df$rv_reg_het ~ abs(df$reg_het - df$ate), col = "red", cex = .3)
+points(df$rv_reg_select ~ abs(df$reg_select - df$ate), col = "green", cex = .3)
+```
+
+# Sensitivity analysis for different specifications
+
+Paramterizing sensitivity quantities with the partial R-squared values does introduce some complications in the interpretations of sensitivity analyses. The inclusion of additional confounders in the analysis can decrease the value of sensitivity parameters by decreasing.
+
+```{r}
+sens_naive <- sensemakr(reg_naive, treatment = "D")$sensitivity_stats$rv_q
+sens_select <- sensemakr(reg_select, treatment = "D")$sensitivity_stats$rv_q
+sens_het <- sensemakr(reg_het, treatment = "D")$sensitivity_stats$rv_q
+sens_full <- sensemakr(reg_full, treatment = "D")$sensitivity_stats$rv_q
+sens_flex <- sensemakr(reg_flex, treatment = "D")$sensitivity_stats$rv_q
+
+
+
+```

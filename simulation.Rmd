@@ -1,0 +1,166 @@
+---
+title: "Untitled"
+author: "Oliver Lang"
+date: "6/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r fake data two}
+n <- 1000
+X <- rnorm(n, 2, 3) # covariate distribution
+g1 <- 1:(n/2)
+g2 <- (n/2 + 1):n
+
+D <- c()
+D[g1] <- 5 + 4*X[g1] + rnorm(n/2, 0, 7) # for half of units, covs prognostic of treatment status, for other half, less prognostic
+D[g2] <- 5 + 4*X[g2] + rnorm(n/2, 0, 3)
+
+# causal effects vary across groups
+tau <- c()
+tau[g1] <- rnorm(n/2, 2, .75)
+tau[g2] <- rnorm(n/2, 3, .75)
+Y_0 <- rnorm(n, 0, 1)
+# causal effects are confounded by X
+Y <- Y_0 + tau*D + 5*X
+
+# aronow-samii weights
+data <- data.frame(Y = Y, D = D, X1 = X[,1], X2 = X[,2], X3 = X[,3])
+model_object_fixest <- feols(Y~D+log(X1)+X2^2+X3^3, data = data)
+model_object_estimatr <- lm_robust(Y~D+log(X1)+X2^2+X3^3, data = data)
+
+
+
+weights <- calculate_w(model_object, "D", data)
+d_tilde <- weights$d_tilde
+```
+
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(Y~D)
+plot(D~X)
+hist(X[D > mean(D)])
+hist(X[D < mean(D)])
+```
+
+
+```{r plots}
+# colors
+col_g1 <- "#56B4E9"
+col_g2 <- "#E69F00"
+# plot of relationship between covs and treatment status for group one vs. group two
+# plots/fig_1_a.pdf
+par(mfrow=c(2,2))
+
+# distribution of individual causal effects
+plot(density(tau, kernel = "epanechnikov"),
+     ylim = c(0,.6), xlab = "Individual causal effect", main = "")
+abline(v = mean(tau), lty = 2)
+abline(v = mean(tau[g1]), col = col_g1, lty = 2)
+abline(v = mean(tau[g2]), col = col_g2, lty = 2)
+lines(density(tau[g1]), col = col_g1)
+lines(density(tau[g2]), col = col_g2)
+
+
+# OLS regression results
+plot(Y~D, ylim = c(-200,300), xlab = "Treatment", ylab = "Outcome")
+abline(lm(Y~D+X))
+abline(lm(Y~D))
+text(x = 30, y = 250, cex = 1.5,adj = 1,
+     labels = paste(
+       paste(
+       paste0("Estimate (model w/ control): ",
+              round(lm(Y~D+X)$coefficients[2],2)),
+       paste0("Estimate (model w/o control): ",
+       round(lm(Y~D)$coefficients[2],2)),
+       sep ="\n"),
+       paste0("True avg. effect: ", round(mean(tau),1)),
+                    sep = "\n"))
+
+
+# diff. in ability of covariates to predict treatment assignment
+plot(D[g1]~X[g1],
+     col = col_g1, ylab = "Values of treatment", xlab = "Values of covariate")
+abline(lm(D[g1]~X[g1]), col = col_g1)
+segments(X[g1], D[g1], X[g1],
+         predict(lm(D[g1]~X[g1])), col = col_g1,lwd = .3)
+points(D[g2]~X[g2], col = col_g2)
+abline(lm(D[g2]~X[g2]), col = col_g2)
+segments(X[g2], D[g2], X[g2],
+         predict(lm(D[g2]~X[g2])), col = col_g2,lwd = .3)
+
+# density of weights
+plot(density(d_tilde[g2]), col = col_g2, xlim = c(0,200),
+     main = "", xlab = "Aronow-Samii regression weights")
+lines(density(d_tilde[g1]), col = col_g1)
+legend("bottomright", 
+  legend = c("Group 1", "Group 2"), 
+  col = c(col_g1,col_g2), pch = c(1,1), bty = "n", pt.cex = 1,
+  cex = 2, text.col = c(col_g1,col_g2), horiz = F, inset = c(0.1, 0.1))
+```
+
+
+```{r overlap connections}
+
+
+
+plot(Y~X, ylim = c(0,300))
+abline(lm(Y~X))
+
+plot(D~X)
+abline(lm(D~X))
+
+plot(Y[g1]~D[g1], col = col_g1)
+points(Y[g2]~D[g2], col = col_g2)
+abline(lm(Y~D))
+
+hist(tau[g1], breaks = 20, main = "", ylab = "Treatment effects", border = col_g1)
+abline(v = mean(tau[g1]))
+hist(tau[g2], breaks = 20, main = "", ylab = "Treatment effects", border = col_g2)
+
+
+# normalized differences in covariates
+
+
+
+
+
+
+lm(Y~D)
+lm(Y~D+X)
+
+mean(tau[g1])
+mean(tau[g2])
+mean(tau)
+
+plot(Y~D)
+plot(Y~X)
+
+x <- matchit(D ~ X, data = data,
+             method = "optimal",
+             estimand = "ATE")
+
+x <- CBPS::npCBPS(D ~ X, ATT = 0)
+lm(Y~D+X, weights = x$weights)
+plot(x$weights ~ d_tilde)
+
+d_tilde[x$weights > .15]
+
+
+
+
+sum(d_tilde[g2])
+sum(d_tilde[g1])
+
+# effective sample wrt X
+sum(X*d_tilde) / sum(d_tilde)
+mean(X)
+
+
+```

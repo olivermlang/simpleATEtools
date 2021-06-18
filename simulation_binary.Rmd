@@ -1,0 +1,508 @@
+---
+title: "Simulation Binary"
+author: "Oliver Lang"
+date: "6/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r fake data}
+library(mvtnorm)
+library(MASS)
+library(MatchIt)
+library(tibble)
+library(ebal)
+library(CBPS)
+library(parallel)
+parallel::detectCores()
+set.seed(801)
+
+```
+
+```{r make data}
+
+make_data <- function(n, 
+                      g1_noise = 1, # noisier p-score func. is for group 1
+                      baseline = 1, # size of baseline diffs btwn T vs. C
+                      heterog = 1, # size of heterog. diffs btwn T vs. C
+                      base_heterog = 1
+                      ) {
+  X_true <- mvrnorm(n, mu = rep(0, 3), Sigma = diag(3))
+# make groups
+  g1 <- sample(1:n, n/2, replace = F)
+  g2 <- c(1:n)[-g1]
+
+# selection: units w/ bigger p-score have bigger Y_0
+# follows b/c baseline potential outcomes are similar func to p-score
+  Y_0 <- rnorm(n, 15, 4) + (2*baseline)*X_true[,1] + 3*X_true[,2] #+ 1*X_true[,3]
+# propensity scores as func. of covs + noise
+  p_score <- c()
+  p_score[g1] <- 1 / (1 + exp(X_true[g1,1] + 5*X_true[g1,2] + 6*X_true[g1,3] + rnorm(length(g1), 0, g1_noise)))
+  p_score[g2] <- 1 / (1 + exp(X_true[g2,1] + 5*X_true[g2,2] + 6*X_true[g2,3] + rnorm(length(g2), 0, 1)))
+  
+
+# assign treatment
+  D <- rbinom(n, 1, p_score)
+
+# heterog. treatment effects, vary wrt cov strata
+  tau <- c()
+  tau <- rnorm(n, 1, 1) + 2*X_true[,2] + (heterog)*X_true[,3] #.7*X_true[g1,2] +    
+
+  Y_1 <- Y_0 + tau
+
+  Y <- D*Y_1 + (1-D)*Y_0
+
+# realized Xs are transformation of covs in underlying p-score function
+  X <- cbind(exp(X_true[,1] / 2),
+           (X_true[,2] / 4) + 10, 
+           round( (5*X_true[,3]) + 5, 1)) # round to nearest 
+  
+  data <- as.data.frame(cbind(D,X,Y,Y_0,Y_1,p_score,tau,(1:n %in% g1),(1:n%in%g2)))
+  colnames(data) <- c("D","X1","X2","X3","Y","Y_0","Y_1","p_score","tau","g1","g2")
+  return(as_tibble(data))
+}
+
+ns <- c(rep(400,3),rep(1000,3))
+g1_noises <- c(1)
+baselines <- c(1)
+heterogs <- c(5)
+base_heterogs <- c(1)
+
+sims <- expand.grid(rep(ns,2),rep(g1_noises,2),rep(baselines,2),rep(heterogs,2),rep(base_heterogs,2))
+colnames(sims) <- c("n","g1_noise","baseline","heterog","base_heterog")
+sim_frames <- list()
+
+
+for (i in 1:nrow(sims)) {
+  sim_frames[[i]] <- make_data(
+    n = sims$n[i],
+    g1_noise = sims$g1_noise[i],
+    baseline = sims$baseline[i],
+    heterog = sims$heterog[i],
+    base_heterog = sims$base_heterog[i]
+  )
+}
+```
+
+
+```{r}
+# regs
+# sim_frame <- sim_frames[[100]]
+# 
+run_regs <- function(sim_frame){
+  naive_ate <- lm(Y~D, data = sim_frame)$coefficients[2]
+  adjusted_selec_ate <- lm(Y ~ D + log(X1) + X2, data =
+                         sim_frame)$coefficients[2]
+  adjusted_het_ate <- lm(Y ~ D + X2 + X3, data = sim_frame)$coefficients[2]
+  adjusted_all_ate <- lm(Y ~ D + log(X1) + X2 + X3, data =
+                       sim_frame)$coefficients[2]
+  
+  # reweighted regression ate
+  # cbps_all_ate <- CBPS::CBPS(Y ~ D + log(X1) + I(X2) + I(X3), ATT = 0, data = sim_frame)
+  # cbps_ate_weights <- cbps_all_ate$weights
+  # cbps_reg_ate <- lm(Y ~ D + log(X1) + X2 + X3, data = sim_frame, weights = cbps_ate_weights)$coefficients[2]
+  
+  # reweighted regression att
+  # cbps_all_att <- CBPS::CBPS(Y ~ D + log(X1) + X2 + X3, ATT = 1, data = sim_frame, method = "exact")
+  # cbps_att_weights <- cbps_all_att$weights
+  # cbps_reg_att <- lm(Y ~ D + log(X1) + X2 + X3, data = sim_frame, weights = cbps_att_weights)$coefficients[2]
+  
+  # flexible regs
+  adjusted_flex_ate <- lm(Y ~ D + splines::bs(X1) + splines::bs(X2) + splines::bs(X3), data = sim_frame)$coefficients[2]
+  
+  true_ate <- mean(sim_frame$tau)
+  true_att <- mean(sim_frame$tau[sim_frame$D==1])
+
+  results <- c(naive_ate,adjusted_selec_ate,adjusted_het_ate,adjusted_all_ate, # cbps_reg_ate,cbps_reg_att,
+               adjusted_flex_ate,true_ate,true_att)
+  
+  names(results) <- c("naive_ate","adjusted_selec_ate","adjusted_het_ate","adjusted_all_ate", # "cbps_reg_ate","cbps_reg_att",
+                      "adjusted_flex_ate","true_ate","true_att")
+  
+  return(results)
+}
+
+# results <- list()
+# for(i in 1:length(sim_frames)){
+#   results[[i]] <- run_regs(sim_frames[[i]])
+# }
+# 
+# sim_frame <- sim_frames[[4]]
+# x <- run_regs(sim_frame)
+
+
+
+results <- mclapply(sim_frames,run_regs, mc.cores = 12)
+# results_1 <- results
+results_df <- dplyr::bind_rows(results)
+results_df <- dplyr::bind_cols(results_df,sims)
+
+# results_df$adjusted_all_bias <- abs(results_df$naive - results_df$adjusted_all)
+# results_df$cbps_all_bias <- abs(results_df$naive - results_df$cbps_all)
+# results_df$adjusted_flex_bias <- abs(results_df$naive - results_df$adjusted_flex)
+
+
+bias_1k <- c(Naive = mean(results_df$naive_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000]),
+          Heterogeneity = mean(results_df$adjusted_het_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000]),
+          Selection = mean(results_df$adjusted_selec_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000]),
+          Full = mean(results_df$adjusted_all_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000]),
+          Flexible = mean(results_df$adjusted_flex_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])) #, CBPS = mean(abs(results_df$cbps_reg_ate - results_df$true_ate)))
+
+bias_400 <- c(Naive = mean(results_df$naive_ate[results_df$n==400] - results_df$true_ate[results_df$n==400]),
+          Heterogeneity = mean(results_df$adjusted_het_ate[results_df$n==400] - results_df$true_ate[results_df$n==400]),
+          Selection = mean(results_df$adjusted_selec_ate[results_df$n==400] - results_df$true_ate[results_df$n==400]),
+          Full = mean(results_df$adjusted_all_ate[results_df$n==400] - results_df$true_ate[results_df$n==400]),
+          Flexible = mean(results_df$adjusted_flex_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])) 
+
+rmse_1k <- c(Naive = sqrt(mean((results_df$naive_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])^2)),
+          Heterogeneity = sqrt(mean((results_df$adjusted_het_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])^2)),
+          Selection = sqrt(mean((results_df$adjusted_selec_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])^2)),
+          Full = sqrt(mean((results_df$adjusted_all_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])^2)),
+          Flexible = sqrt(mean((results_df$adjusted_flex_ate[results_df$n==1000] - results_df$true_ate[results_df$n==1000])^2))) 
+
+rmse_400 <- c(Naive = sqrt(mean((results_df$naive_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])^2)),
+          Heterogeneity = sqrt(mean((results_df$adjusted_het_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])^2)),
+          Selection = sqrt(mean((results_df$adjusted_selec_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])^2)),
+          Full = sqrt(mean((results_df$adjusted_all_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])^2)),
+          Flexible = sqrt(mean((results_df$adjusted_flex_ate[results_df$n==400] - results_df$true_ate[results_df$n==400])^2))) #CBPS = sqrt(mean((results_df$cbps_reg_ate - results_df$true_ate)^2)))
+
+sim_study <- tibble("Estimator" = rep(c("No controls","Heterogeneity controls","Selection controls","Full controls","Splines"),2), "Sample size" = c("n = 400","","","","","n = 1000","","","",""), "Bias" =  c(bias_400,bias_1k), "RMSE" = c(rmse_400,rmse_1k))
+
+sink(file="sim_study.tex")
+xtable::xtable(sim_study)
+sink()
+```
+
+```{r}
+
+
+
+
+
+
+mean(results_df$adjusted_all_bias)
+mean(results_df$cbps_all_bias)
+mean(results_df$adjusted_flex_bias)
+
+
+naive <- lm(Y~D, data = data)$coefficients[2]
+adjusted_selec <- lm(Y ~ D + log(X1) + X2, data = data)$coefficients[2]
+adjusted_het <- lm(Y ~ D + X2 + X3, data = data)$coefficients[2]
+adjusted_all <- lm(Y ~ D + log(X1) + X2 + X3, data = data)$coefficients[2]
+
+mean(tau)
+
+naive
+adjusted_selec
+adjusted_het
+adjusted_all
+
+model_object <- lm(Y ~ D + log(X1) + X2 + X3, data = sim_frames[[1]])
+# variance of treatment in underlying covariate strata
+# var_D_cov_strata
+unique_cov_vals <- sort(unique(X[,3]))
+var_of_treat <- map_dbl(unique_cov_vals,~var(D[X[,3]==.x]))
+
+# calculate regression weights
+# model_object <- lm(Y ~ D + bs(X1) + bs(X2) + bs(X3), data = sim_frames[[1]])
+weights <- calculate_w(model_object = model_object, treatment = "D", data = sim_frames[[1]])
+d_tilde <- weights$d_tilde
+avg_d_tilde_cov_vals <- map_dbl(unique_cov_vals,~mean(d_tilde[X[,3]==.x]))
+sum_d_tilde_cov_vals <- map_dbl(unique_cov_vals,~sum(d_tilde[X[,3]==.x]))
+
+sum(d_tilde*tau) / sum(d_tilde)
+
+par(mfrow=c(2,2))
+plot(map_dbl(unique_cov_vals,~sum(X[,3]==.x))~unique_cov_vals,
+        xlab = "Covariate strata", ylab = "Count")
+plot(var_of_treat~unique_cov_vals,
+        xlab = "Covariate strata", ylab = "Variance of treatment within strata")
+plot(avg_d_tilde_cov_vals~unique_cov_vals,
+        xlab = "Covariate strata", ylab = "Average regression weights")
+plot(sum_d_tilde_cov_vals~unique_cov_vals,
+        xlab = "Covariate strata", ylab = "Summed regression weights")
+```
+
+```{r}
+
+
+plot(density(d_tilde))
+sum(d_tilde)
+max(d_tilde)
+min(d_tilde)
+quantile(d_tilde)
+mean(d_tilde)
+```
+
+
+```{r}
+# naive estimator decomp for any given data
+lm(Y~D)$coefficients[2]
+
+mean(tau)+(mean(Y_0[D==1]) - mean(Y_0[D==0]))+((1-sum(D)/n)*(mean(tau[D==1]) - mean(tau[D==0])))
+
+
+
+# decomp averages
+mean(map_dbl(sim_frames, ~lm(.x$Y~.x$D)$coefficients[2]))
+
+mean(map_dbl(sim_frames, ~mean(.x$tau)))
+
+mean(map_dbl(sim_frames, ~mean(.x$Y_0[.x$D==1])-mean(.x$Y_0[.x$D==0])))
+
+mean(map_dbl(sim_frames, ~((1-sum(.x$D)/nrow(.x))*(mean(.x$tau[.x$D==1]) - mean(.x$tau[.x$D==0])))))
+
+
+
+
+
+plot(c(lm(Y~D)$coefficients[2],mean(tau),(mean(Y_0[D==1]) - mean(Y_0[D==0])),((1-sum(D)/n)*(mean(tau[D==1]) - mean(tau[D==0]))))~c(1:4))
+abline(h = lm(Y~D)$coefficients[2])
+```
+
+```{r}
+# selection
+# selection problems
+par(mfrow=c(3,3))
+plot(p_score~X[,1], xlab = "Covariate 1", ylab = "True propensity score", col ="grey")
+abline(lm(p_score~X[,1]))
+plot(Y_0~X[,1], xlab = "Covariate 1", ylab = "Baseline potential outcomes, Y(0)", col ="grey")
+abline(lm(Y_0~X[,1]))
+plot(tau~X[,1], xlab = "Covariate 1", ylab = "True causal effects", col ="grey")
+abline(lm(tau~X[,1]))
+
+plot(p_score~X[,2], xlab = "Covariate 2", ylab = "True propensity score", col ="grey")
+abline(lm(p_score~X[,2]))
+plot(Y_0~X[,2], xlab = "Covariate 2", ylab = "Baseline potential outcomes, Y(0)", col ="grey")
+abline(lm(Y_0~X[,2]))
+plot(tau~X[,2], xlab = "Covariate 2", ylab = "True causal effects", col ="grey")
+abline(lm(tau~X[,2]))
+
+plot(p_score~jitter(X[,3]), xlab = "Covariate 3", ylab = "True propensity score", col ="grey")
+abline(lm(p_score~X[,3]))
+plot(Y_0~jitter(X[,3]), xlab = "Covariate 3", ylab = "Baseline potential outcomes, Y(0)", col ="grey")
+abline(lm(Y_0~X[,3]))
+plot(tau~jitter(X[,3]), xlab = "Covariate 3", ylab = "True causal effects", col ="grey")
+abline(lm(tau~X[,3]))
+```
+
+```{r}
+
+
+
+
+plot(density(X[,1][D==1]))
+lines(density(X[,1][D==0]))
+
+plot(density(X[,2][D==1]))
+lines(density(X[,2][D==0]))
+
+plot(density(X[,3][D==1]))
+lines(density(X[,3][D==0]))
+
+
+lm(Y~D+X)
+mean(tau[g1])
+mean(tau[g2])
+mean(tau[D==1])
+mean(tau[D==0])
+
+
+
+
+
+
+
+
+
+taus_by_strata <- map_dbl(unique_cov_vals, ~mean(tau[X[,4]==.x]))
+barplot(taus_by_strata~unique_cov_vals,
+        xlab = "Covariate strata", y = "Avg. treatment effects w/in strata")
+
+Y_0_by_strata <- map_dbl(unique_cov_vals, ~mean(Y_0[X[,4]==.x]))
+barplot(Y_0_by_strata~unique_cov_vals,
+        xlab = "Covariate strata", y = "Y_0 w/in strata")
+
+
+
+
+mean(tau[1:n==g1 & X[,4]==100])
+mean(tau[1:n==g1 & X[,4]==200])
+mean(tau[1:n==g1 & X[,4]==300])
+
+mean(tau[g2])
+mean(tau)
+```
+
+```{r}
+
+# diagnostic
+hist(p_score[g1])
+hist(p_score[g2])
+
+lm(Y~D)
+ols_results <- lm(Y~D+X)
+AS_weights <- calculate_w(ols_results, "D", data)
+
+
+plot(density(AS_weights$d_tilde[g2]), col = col_g2, xlim = c(0,5))
+lines(density(AS_weights$d_tilde[g1]), col = col_g1)
+abline(v = quantile(AS_weights$d_tilde[g2])[5], col = col_g2)
+abline(v = quantile(AS_weights$d_tilde[g1])[5], col = col_g1)
+
+hist(AS_weights$d_tilde)
+sum(AS_weights$d_tilde)
+max(AS_weights$d_tilde)
+
+cbps_result <- CBPS(Y~D+log(X1)+I(X2)+I(X3), ATT = 0, data = data, method = "exact", iterations = 400)
+cbps_result$coefficients
+hist(cbps_result$fitted.values, breaks = 70)
+sum(cbps_result$fitted.values > .95)
+sum(cbps_result$fitted.values < .95)
+
+p_score * (1 - p_score)
+hist(p_score)
+
+```
+    
+```{r density plots}
+plot(density(Y_0))
+lines(density(Y_0[p_score > .5]), col ="#D55E00")
+lines(density(Y_0[p_score < .5]), col = "#009E73")
+abline(v = mean(Y_0), lty = 2)
+abline(v = mean(Y_0[p_score > .5]), col ="#D55E00", lty = 2)
+abline(v = mean(Y_0[p_score < .5]), col = "#009E73", lty =2)  
+
+plot(density(tau))
+lines(density(tau[p_score > .5]), col ="#D55E00")
+lines(density(tau[p_score < .5]), col = "#009E73")
+abline(v = mean(tau), lty = 2)
+abline(v = mean(tau[p_score > .5]), col ="#D55E00", lty = 2)
+abline(v = mean(tau[p_score < .5]), col = "#009E73", lty =2)  
+
+plot(density(Y_1))
+lines(density(Y_1[p_score > .5]), col ="#D55E00")
+lines(density(Y_1[p_score < .5]), col = "#009E73")
+abline(v = mean(Y_1), lty = 2)
+abline(v = mean(Y_1[p_score > .5]), col ="#D55E00", lty = 2)
+abline(v = mean(Y_1[p_score < .5]), col = "#009E73", lty =2)  
+
+plot(density(Y))
+lines(density(Y[p_score > .5]), col ="#D55E00")
+lines(density(Y[p_score < .5]), col = "#009E73")
+abline(v = mean(Y), lty = 2)
+abline(v = mean(Y[p_score > .5]), col ="#D55E00", lty = 2)
+abline(v = mean(Y[p_score < .5]), col = "#009E73", lty =2)  
+```
+
+
+```{r}
+    
+    
+    mean(tau)
+    lm(Y~D)
+    lm(Y~D+X)
+    
+    
+      
+      2*X[,1] + 1.2*X[,2] + 2.1*X[,3] + 5*X[,4] + rnorm(n)
+    Y <- D*Y_1 + (1-D)*Y_0
+    # transform covariates so that models are misspecified
+    X <- cbind(exp(X[,1] / 2), (X[,2] / (1 + exp(X[,1]))) + 10, (X[,1] * X[,3] / 25 + .6)^3, (X[,2] + X[,4] + 20)^2)
+    data <- cbind(D,Y,X,Y_0,Y_1)
+    tau <- Y_1 - Y_0
+    ate <- mean(tau)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(X[,1]~Y)
+abline(lm(X[,1]~Y))
+plot(X[,2]~Y)
+abline(lm(X[,2]~Y))
+plot(X[,3]~Y)
+abline(lm(X[,3]~Y))
+plot(X[,4]~Y)
+abline(lm(X[,4]~Y))
+```
+
+
+```{r}
+par(mfrow=c(2,2))
+plot(density(X[,1][D==1]),
+     ylim=c(0,max(c(density(X[,1][D==1])$y,density(X[,1][D==0])$y))))
+lines(density(X[,1][D==0]))
+plot(density(X[,2][D==1]),
+     ylim=c(0,max(c(density(X[,2][D==1])$y,density(X[,2][D==0])$y))))
+lines(density(X[,2][D==0]))
+plot(density(X[,3][D==1]),
+     ylim=c(0,max(c(density(X[,3][D==1])$y,density(X[,3][D==0])$y))))
+lines(density(X[,3][D==0]))
+plot(density(X[,4][D==1]),
+     ylim=c(0,max(c(density(X[,4][D==1])$y,density(X[,4][D==0])$y))))
+lines(density(X[,4][D==0]))
+```
+
+```{r}
+lm(Y~D)
+model_object_bin <- lm(Y~D+X)
+mean(tau)
+
+weights_bin <- calculate_w(model_object_bin, "D", data)
+d_tilde <- weights_bin$d_tilde
+
+sum(tau * weights_bin$d_tilde) / sum(weights_bin$d_tilde)
+
+
+for(i in 1:length(d_tilde)){
+  
+}
+
+matchit()
+```
+
+
+
+```{r}
+par(mfrow=c(2,2))
+col_g2 <- "#E69F00"
+col_g1 <- "#009E73"
+plot(Y[g1]~X_true[g1,1], col =col_g1, cex = .4)
+abline(lm(Y[g1]~X_true[g1,1]), col =col_g1)
+segments(X_true[g1,1], Y[g1], X_true[g1,1],
+         predict(lm(Y[g1]~X_true[g1,1])), col = col_g1, lwd = .3)
+points(Y[g2]~X_true[g2,1], col = col_g2, cex = .4)
+abline(lm(Y[g2]~X_true[g2,1]), col = col_g2)
+segments(X_true[g2,1], Y[g2], X_true[g2,1],
+         predict(lm(Y[g2]~X_true[g2,1])), col = col_g2, lwd = .3)
+
+plot(Y[g1]~X_true[g1,2], col =col_g1, cex = .4)
+abline(lm(Y[g1]~X_true[g1,2]), col =col_g1)
+segments(X_true[g1,2], Y[g1], X_true[g1,2],
+         predict(lm(Y[g1]~X_true[g1,2])), col = col_g1, lwd = .3)
+points(Y[g2]~X_true[g2,2], col = col_g2, cex = .4)
+abline(lm(Y[g2]~X_true[g2,2]), col = col_g2)
+segments(X_true[g2,2], Y[g2], X_true[g2,2],
+         predict(lm(Y[g2]~X_true[g2,2])), col = col_g2, lwd = .3)
+
+plot(Y[g1]~X_true[g1,3], col =col_g1, cex = .4)
+abline(lm(Y[g1]~X_true[g1,3]), col =col_g1)
+segments(X_true[g1,3], Y[g1], X_true[g1,3],
+         predict(lm(Y[g1]~X_true[g1,3])), col = col_g1, lwd = .3)
+points(Y[g2]~X_true[g2,3], col = col_g2, cex = .4)
+abline(lm(Y[g2]~X_true[g2,3]), col = col_g2)
+segments(X_true[g2,3], Y[g2], X_true[g2,3],
+         predict(lm(Y[g2]~X_true[g2,3])), col = col_g2, lwd = .3)
+
+plot(Y[g1]~X_true[g1,4], col =col_g1, cex = .4)
+abline(lm(Y[g1]~X_true[g1,4]), col =col_g1)
+segments(X_true[g1,4], Y[g1], X_true[g1,4],
+         predict(lm(Y[g1]~X_true[g1,4])), col = col_g1, lwd = .3)
+points(Y[g2]~X_true[g2,4], col = col_g2, cex = .4)
+abline(lm(Y[g2]~X_true[g2,4]), col = col_g2)
+segments(X_true[g2,4], Y[g2], X_true[g2,4],
+         predict(lm(Y[g2]~X_true[g2,4])), col = col_g2, lwd = .3)
+```

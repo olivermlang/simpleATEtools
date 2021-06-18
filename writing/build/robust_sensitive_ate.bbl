@@ -1,0 +1,41 @@
+\begin{thebibliography}{xx}
+
+\harvarditem{Angrist and Pischke}{2008}{angristpischke2008}
+Angrist, Joshua~D, and J{\"o}rn-Steffen Pischke. 2008.
+\newblock {\em Mostly harmless econometrics: An empiricist's companion}.
+\newblock Princeton university press.
+
+\harvarditem{Aronow and Samii}{2016}{aronowsamii2016}
+Aronow, Peter~M, and Cyrus Samii. 2016.
+\newblock ``Does regression produce representative estimates of causal
+  effects?'' {\em American Journal of Political Science} 60(1):~250--267.
+
+\harvarditem{Bonvini and Kennedy}{2021}{bonvinikennedy2021}
+Bonvini, Matteo, and Edward~H. Kennedy. 2021.
+\newblock ``Sensitivity Analysis via the Proportion of Unmeasured
+  Confounding.'' {\em Journal of the American Statistical Association}
+  ,~1–11.
+
+\harvarditem{Cinelli and Hazlett}{2020}{cinellihazlett2020}
+Cinelli, Carlos, and Chad Hazlett. 2020.
+\newblock ``Making sense of sensitivity: Extending omitted variable bias.''
+  {\em Journal of the Royal Statistical Society: Series B (Statistical
+  Methodology)} 82(1):~39--67.
+
+\harvarditem{Hankinson}{2018}{hankinson2018}
+Hankinson, Michael. 2018.
+\newblock ``When do renters behave like homeowners? High rent, price anxiety,
+  and NIMBYism.'' {\em American Political Science Review} 112(3):~473--493.
+
+\harvarditem{Kang and Schafer}{2007}{kangshafer2007}
+Kang, Joseph~DY, and Joseph~L Schafer. 2007.
+\newblock ``Demystifying double robustness: A comparison of alternative
+  strategies for estimating a population mean from incomplete data.'' {\em
+  Statistical science} 22(4):~523--539.
+
+\harvarditem{Winship and Morgan}{1999}{morganwinship1999}
+Winship, Christopher, and Stephen~L Morgan. 1999.
+\newblock ``The estimation of causal effects from observational data.'' {\em
+  Annual review of sociology} 25(1):~659--706.
+
+\end{thebibliography}
